@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bateu o ponto? ⏰</title>
+<style>
+  :root{
+    --bg:#10233a; --panel:#183452; --ink:#f3f0e6; --mute:#9db4cc;
+    --sun:#ffc93c; --out:#ff7a59; --ok:#5fd6a0; --warn:#ff6b6b;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%,#1f4a73,var(--bg));
+    color:var(--ink);
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    display:flex;justify-content:center;padding:20px 14px 40px;
+  }
+  main{width:100%;max-width:460px;text-align:center}
+  h1{font-size:1.7rem;margin:.2em 0 .1em;letter-spacing:-.01em}
+  .sub{color:var(--mute);margin:0 0 14px;font-size:.95rem}
+
+  #dial{width:100%;max-width:340px;touch-action:none;user-select:none;cursor:grab}
+  #dial:active{cursor:grabbing}
+  .lbl{font-size:11px;font-weight:700;fill:#0d1b2e;paint-order:stroke;stroke:rgba(255,255,255,.55);stroke-width:2.5px}
+  .lbl.n{fill:#fff;stroke:rgba(0,0,30,.6)}
+  #hIn{filter:drop-shadow(0 0 6px rgba(255,201,60,.9))}
+
+  .times{display:flex;gap:10px;margin:14px 0 6px}
+  .box{flex:1;background:var(--panel);border-radius:16px;padding:12px 8px}
+  .box small{display:block;color:var(--mute);font-size:.8rem;margin-bottom:2px}
+  .box b{font-size:2.3rem;font-variant-numeric:tabular-nums;line-height:1.1}
+  .box.in b{color:var(--sun)} .box.out b{color:var(--out)}
+  .box em{display:block;font-style:normal;font-size:.75rem;color:var(--mute);min-height:1em}
+
+  .say{background:var(--panel);border-radius:16px;padding:12px 14px;margin:8px 0;text-align:left;
+       border-left:5px solid var(--sun);min-height:3.2em;display:flex;align-items:center}
+  .say.out{border-left-color:var(--out)}
+  .say.pop{animation:pop .25s ease-out}
+  @keyframes pop{from{transform:scale(.97);opacity:.5}to{transform:none;opacity:1}}
+
+  .saldo{margin:10px 0;font-size:.95rem;color:var(--mute)}
+  .saldo strong.ok{color:var(--ok)} .saldo strong.warn{color:var(--warn)}
+
+  .ctl{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  button,input[type=time]{
+    font:inherit;color:var(--ink);background:var(--panel);border:2px solid #2a5079;
+    border-radius:12px;padding:9px 14px;
+  }
+  button{cursor:pointer;font-weight:700}
+  button:hover{border-color:var(--sun)}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+  #left{margin-top:14px;font-size:.95rem;color:var(--mute);min-height:1.4em}
+  #left b{color:var(--ink)}
+  @media (prefers-reduced-motion:reduce){.say.pop{animation:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Bateu o ponto? ⏰</h1>
+  <p class="sub">Arraste o ponteiro amarelo até a hora que você entrou.<br>Jornada: <b>{{ duration // 60 }}h{{ '%02d' % (duration % 60) }}</b> · padrão {{ start }} → {{ end }}</p>
+
+  <svg id="dial" viewBox="0 0 300 300" role="img" aria-label="Relógio de 24 horas">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#9fdcff"/><stop offset=".5" stop-color="#5a8fd0"/>
+        <stop offset="1" stop-color="#15213f"/>
+      </linearGradient>
+    </defs>
+    <circle cx="150" cy="150" r="138" fill="url(#sky)" stroke="#2a5079" stroke-width="4"/>
+    <g id="ticks"></g>
+    <path id="arc" fill="none" stroke="rgba(255,122,89,.85)" stroke-width="10" stroke-linecap="round"/>
+    <line id="hOut" x1="150" y1="150" x2="150" y2="50" stroke="#ff7a59" stroke-width="4" stroke-linecap="round"/>
+    <circle id="dOut" r="9" fill="#ff7a59" stroke="#fff" stroke-width="2"/>
+    <line id="hIn" x1="150" y1="150" x2="150" y2="40" stroke="#ffc93c" stroke-width="6" stroke-linecap="round"/>
+    <circle id="dIn" r="13" fill="#ffc93c" stroke="#fff" stroke-width="3"/>
+    <circle cx="150" cy="150" r="6" fill="#fff"/>
+    <text x="150" y="105" text-anchor="middle" font-size="26">☀️</text>
+    <text x="150" y="210" text-anchor="middle" font-size="22">🌙</text>
+  </svg>
+
+  <div class="times">
+    <div class="box in"><small>Entrada</small><b id="tIn">--:--</b><em id="eIn"></em></div>
+    <div class="box out"><small>Pode sair às</small><b id="tOut">--:--</b><em id="eOut"></em></div>
+  </div>
+
+  <div class="say" id="mIn">Arraste o relógio…</div>
+  <div class="say out" id="mOut">…que eu digo a hora de vazar.</div>
+  <div class="saldo" id="saldo"></div>
+  <div id="left"></div>
+
+  <div class="ctl">
+    <button id="btnNow">Entrei agora</button>
+    <button id="btnStd">Horário padrão</button>
+    <input type="time" id="manual" step="60" aria-label="Digitar horário de entrada">
+  </div>
+</main>
+
+<script>
+const STD = "{{ start }}";
+const C = 150, R_IN = 100, R_OUT = 88, R_TICK = 138;
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const fmt = m => { m = ((m % 1440) + 1440) % 1440; return pad(Math.floor(m / 60)) + ":" + pad(m % 60); };
+const toMin = s => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+
+// minutos do dia -> ângulo (12h no topo, 0h embaixo)
+const ang = m => (m / 1440) * 360 + 180;
+const pt = (m, r) => {
+  const a = ang(m) * Math.PI / 180;
+  return [C + r * Math.sin(a), C - r * Math.cos(a)];
+};
+
+// marcações
+(function ticks() {
+  let s = "";
+  for (let h = 0; h < 24; h++) {
+    const [x1, y1] = pt(h * 60, R_TICK - (h % 3 ? 6 : 12)), [x2, y2] = pt(h * 60, R_TICK - 1);
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${h < 6 || h >= 18 ? "#cfe" : "#0d1b2e"}" stroke-width="${h % 3 ? 1 : 2.5}" opacity=".8"/>`;
+    if (h % 3 === 0) {
+      const [tx, ty] = pt(h * 60, R_TICK - 24);
+      s += `<text class="lbl ${h < 6 || h >= 18 ? "n" : ""}" x="${tx}" y="${ty + 4}" text-anchor="middle">${h}h</text>`;
+    }
+  }
+  $("ticks").innerHTML = s;
+})();
+
+let entry = toMin(STD), timer = null, dragging = false;
+
+function draw(res) {
+  const e = entry, x = entry + {{ duration }};
+  const [ix, iy] = pt(e, R_IN), [ox, oy] = pt(x, R_OUT);
+  $("hIn").setAttribute("x2", ix); $("hIn").setAttribute("y2", iy);
+  $("dIn").setAttribute("cx", ix); $("dIn").setAttribute("cy", iy);
+  $("hOut").setAttribute("x2", ox); $("hOut").setAttribute("y2", oy);
+  $("dOut").setAttribute("cx", ox); $("dOut").setAttribute("cy", oy);
+  const [ax, ay] = pt(e, R_OUT), [bx, by] = pt(x, R_OUT);
+  const large = {{ duration }} > 720 ? 1 : 0;
+  $("arc").setAttribute("d", `M${ax} ${ay} A${R_OUT} ${R_OUT} 0 ${large} 1 ${bx} ${by}`);
+  $("tIn").textContent = fmt(e);
+  $("manual").value = fmt(e);
+  $("tOut").textContent = fmt(x);
+  $("eOut").textContent = x >= 1440 ? "(dia seguinte 😬)" : "";
+}
+
+function say(el, txt) {
+  if (el.textContent === txt) return;
+  el.textContent = txt; el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+}
+
+async function fetchMsg() {
+  try {
+    const r = await fetch("/api/calc?entry=" + fmt(entry));
+    const d = await r.json();
+    if (d.error) return;
+    say($("mIn"), d.entry_msg); say($("mOut"), d.exit_msg);
+    const dl = d.delta, sd = d.exit_delta;
+    $("eIn").textContent = dl === 0 ? "no horário" : `${Math.abs(dl)} min ${dl < 0 ? "antes" : "depois"} do padrão`;
+    $("eOut").textContent = ($("eOut").textContent || "") ||
+      (sd === 0 ? "igual à saída padrão" : `${Math.abs(sd)} min ${sd < 0 ? "antes" : "depois"} da padrão`);
+    $("saldo").innerHTML = sd > 0
+      ? `Sair depois de {{ end }} = <strong class="warn">hora extra!</strong> 🚨`
+      : `Sem hora extra: <strong class="ok">${sd === 0 ? "na medida" : "sobra " + Math.abs(sd) + " min de vida"}</strong> 🎉`;
+  } catch (_) { /* servidor offline: o relógio segue funcionando */ }
+}
+
+function update(now) {
+  draw();
+  clearTimeout(timer);
+  timer = setTimeout(fetchMsg, now ? 0 : 120);
+}
+
+// arrastar
+function fromEvent(ev) {
+  const svg = $("dial"), r = svg.getBoundingClientRect();
+  const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+  let deg = Math.atan2(dx, -dy) * 180 / Math.PI; if (deg < 0) deg += 360;
+  const m = (((deg - 180 + 360) % 360) / 360) * 1440;
+  return Math.round(m / 5) * 5 % 1440;
+}
+$("dial").addEventListener("pointerdown", e => { dragging = true; $("dial").setPointerCapture(e.pointerId); entry = fromEvent(e); update(); });
+$("dial").addEventListener("pointermove", e => { if (dragging) { entry = fromEvent(e); update(); } });
+["pointerup", "pointercancel"].forEach(t => $("dial").addEventListener(t, () => dragging = false));
+
+$("manual").addEventListener("change", e => { if (e.target.value) { entry = toMin(e.target.value); update(true); } });
+$("btnStd").onclick = () => { entry = toMin(STD); update(true); };
+$("btnNow").onclick = () => { const n = new Date(); entry = n.getHours() * 60 + n.getMinutes(); update(true); };
+
+// contagem regressiva (só faz sentido se a entrada é de hoje)
+setInterval(() => {
+  const n = new Date(), nowM = n.getHours() * 60 + n.getMinutes(), x = entry + {{ duration }};
+  const diff = x - nowM;
+  $("left").innerHTML = (diff > 0 && diff <= {{ duration }})
+    ? `Faltam <b>${Math.floor(diff / 60)}h${pad(diff % 60)}</b> pra você ser livre 🕊️` : "";
+}, 1000);
+
+update(true);
+</script>
+</body>
+</html>
